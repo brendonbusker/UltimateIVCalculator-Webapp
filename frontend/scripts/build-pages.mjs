@@ -7,6 +7,7 @@ const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const repoName = process.env.GITHUB_REPOSITORY?.split('/')[1] ?? 'UltimateIVCalculator-Webapp';
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? `/${repoName}`;
 const normalizedBasePath = basePath === '/' ? '' : basePath.replace(/\/$/, '');
+const nextCli = path.join(rootDir, 'node_modules', 'next', 'dist', 'bin', 'next');
 const env = {
   ...process.env,
   NEXT_PUBLIC_DATA_MODE: 'static',
@@ -41,10 +42,15 @@ async function rewriteExportPaths(targetDir) {
   }
 }
 
-const child = spawn('cmd.exe', ['/c', 'npx', 'next', 'build'], {
+const child = spawn(process.execPath, [nextCli, 'build'], {
   cwd: rootDir,
   env,
   stdio: 'inherit',
+});
+
+child.on('error', (error) => {
+  console.error(error);
+  process.exit(1);
 });
 
 child.on('exit', async (code) => {
