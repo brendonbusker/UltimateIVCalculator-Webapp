@@ -7,3 +7,6 @@ backend/__pycache__/
 venv/
 .env
 .env.*
+
+*-dev.log
+*-dev.err.log

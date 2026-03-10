@@ -1,4 +1,3 @@
-
 from typing import List
 
 from fastapi import APIRouter, HTTPException, Query
@@ -52,7 +51,7 @@ def pokemon(name: str, generation: int | None = None) -> PokemonSummary:
     try:
         return PokemonSummary(**pokemon_summary(name, generation))
     except requests.HTTPError as exc:
-        raise HTTPException(status_code=404, detail="Pokémon not found.") from exc
+        raise HTTPException(status_code=404, detail="Pokemon not found.") from exc
 
 
 @router.post("/calculate", response_model=CalculateResponse)
@@ -64,11 +63,11 @@ def calculate_endpoint(payload: CalculateRequest) -> CalculateResponse:
             level=payload.level,
             nature_name=payload.nature,
             characteristic_name=payload.characteristic,
-            observed_stats=payload.observed_stats,
-            effort_values=payload.effort_values,
+            observed_stats=payload.observed_stats.by_api_key(),
+            effort_values=payload.effort_values.by_api_key(),
         )
         return CalculateResponse(**result)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except requests.HTTPError as exc:
-        raise HTTPException(status_code=404, detail="Pokémon or nature lookup failed.") from exc
+        raise HTTPException(status_code=404, detail="Pokemon or nature lookup failed.") from exc

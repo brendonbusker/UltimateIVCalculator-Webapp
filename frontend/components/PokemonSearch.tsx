@@ -10,6 +10,10 @@ type Props = {
   onSelect?: (value: string) => void;
 };
 
+type SearchItem = {
+  name: string;
+};
+
 export default function PokemonSearch({ value, onChange, onSelect }: Props) {
   const [matches, setMatches] = useState<string[]>([]);
   const [open, setOpen] = useState(false);
@@ -19,15 +23,20 @@ export default function PokemonSearch({ value, onChange, onSelect }: Props) {
   useEffect(() => {
     const controller = new AbortController();
     const query = value.trim();
+
     const timer = setTimeout(async () => {
       try {
-        const url = `${API_URL}/pokemon/search?q=${encodeURIComponent(query)}&limit=8`;
+        const url = `${API_URL}/pokemon/search?q=${encodeURIComponent(query)}`;
         const res = await fetch(url, { signal: controller.signal });
-        if (!res.ok) return;
-        const data = await res.json();
-        setMatches(data.matches ?? []);
+        if (!res.ok) {
+          return;
+        }
+
+        const data = (await res.json()) as SearchItem[];
+        const nextMatches = data.map((entry) => entry.name);
+        setMatches(nextMatches);
         setActiveIndex(0);
-        setOpen((data.matches ?? []).length > 0 && document.activeElement?.tagName === 'INPUT');
+        setOpen(nextMatches.length > 0 && document.activeElement?.tagName === 'INPUT');
       } catch {}
     }, 120);
 
@@ -43,6 +52,7 @@ export default function PokemonSearch({ value, onChange, onSelect }: Props) {
         setOpen(false);
       }
     }
+
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
@@ -57,6 +67,7 @@ export default function PokemonSearch({ value, onChange, onSelect }: Props) {
 
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
     if (!hasMatches) return;
+
     if (event.key === 'ArrowDown') {
       event.preventDefault();
       setActiveIndex((prev) => (prev + 1) % matches.length);
@@ -82,7 +93,7 @@ export default function PokemonSearch({ value, onChange, onSelect }: Props) {
         }}
         onFocus={() => setOpen(matches.length > 0)}
         onKeyDown={handleKeyDown}
-        placeholder="Start typing a Pokémon..."
+        placeholder="Start typing a Pokemon..."
       />
 
       {hasMatches && (
