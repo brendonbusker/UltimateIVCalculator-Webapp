@@ -1,96 +1,105 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 
-import { searchPokemon } from '@/lib/api';
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:8000/api';
 
-type PokemonSearchProps = {
+type Props = {
   value: string;
   onChange: (value: string) => void;
+  onSelect?: (value: string) => void;
 };
 
-export function PokemonSearch({ value, onChange }: PokemonSearchProps) {
-  const [results, setResults] = useState<string[]>([]);
+export default function PokemonSearch({ value, onChange, onSelect }: Props) {
+  const [matches, setMatches] = useState<string[]>([]);
   const [open, setOpen] = useState(false);
-  const [highlightedIndex, setHighlightedIndex] = useState(0);
-  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const controller = new AbortController();
-    const timeout = window.setTimeout(async () => {
+    const query = value.trim();
+    const timer = setTimeout(async () => {
       try {
-        const matches = await searchPokemon(value);
-        setResults(matches);
-        setOpen(matches.length > 0 && value.trim().length > 0);
-        setHighlightedIndex(0);
-      } catch {
-        setResults([]);
-        setOpen(false);
-      }
+        const url = `${API_URL}/pokemon/search?q=${encodeURIComponent(query)}&limit=8`;
+        const res = await fetch(url, { signal: controller.signal });
+        if (!res.ok) return;
+        const data = await res.json();
+        setMatches(data.matches ?? []);
+        setActiveIndex(0);
+        setOpen((data.matches ?? []).length > 0 && document.activeElement?.tagName === 'INPUT');
+      } catch {}
     }, 120);
 
     return () => {
+      clearTimeout(timer);
       controller.abort();
-      window.clearTimeout(timeout);
     };
   }, [value]);
 
   useEffect(() => {
-    const listener = (event: MouseEvent) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+    function handleClickOutside(event: MouseEvent) {
+      if (!containerRef.current?.contains(event.target as Node)) {
         setOpen(false);
       }
-    };
-    window.addEventListener('mousedown', listener);
-    return () => window.removeEventListener('mousedown', listener);
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const selectValue = (nextValue: string) => {
-    onChange(nextValue);
+  const hasMatches = useMemo(() => open && matches.length > 0, [open, matches]);
+
+  function selectName(name: string) {
+    onChange(name);
+    onSelect?.(name);
     setOpen(false);
-  };
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (!hasMatches) return;
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setActiveIndex((prev) => (prev + 1) % matches.length);
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setActiveIndex((prev) => (prev - 1 + matches.length) % matches.length);
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      selectName(matches[activeIndex]);
+    } else if (event.key === 'Escape') {
+      setOpen(false);
+    }
+  }
 
   return (
-    <div className="search-wrap" ref={wrapperRef}>
+    <div className="search-shell" ref={containerRef}>
       <input
+        className="input"
         value={value}
-        onChange={(event) => onChange(event.target.value)}
-        onFocus={() => setOpen(results.length > 0 && value.trim().length > 0)}
-        onKeyDown={(event) => {
-          if (!open || results.length === 0) {
-            return;
-          }
-          if (event.key === 'ArrowDown') {
-            event.preventDefault();
-            setHighlightedIndex((current) => Math.min(current + 1, results.length - 1));
-          } else if (event.key === 'ArrowUp') {
-            event.preventDefault();
-            setHighlightedIndex((current) => Math.max(current - 1, 0));
-          } else if (event.key === 'Enter') {
-            event.preventDefault();
-            selectValue(results[highlightedIndex]);
-          } else if (event.key === 'Escape') {
-            setOpen(false);
-          }
+        onChange={(e) => {
+          onChange(e.target.value);
+          setOpen(true);
         }}
-        className="app-input"
-        placeholder="Search Pokémon"
+        onFocus={() => setOpen(matches.length > 0)}
+        onKeyDown={handleKeyDown}
+        placeholder="Start typing a Pokémon..."
       />
-      {open ? (
-        <div className="search-dropdown">
-          {results.map((result, index) => (
+
+      {hasMatches && (
+        <div className="search-results card">
+          {matches.map((match, index) => (
             <button
-              key={result}
+              key={match}
               type="button"
-              className={`search-option ${index === highlightedIndex ? 'search-option-active' : ''}`}
-              onMouseEnter={() => setHighlightedIndex(index)}
-              onClick={() => selectValue(result)}
+              className={`search-option ${index === activeIndex ? 'active' : ''}`}
+              onMouseEnter={() => setActiveIndex(index)}
+              onClick={() => selectName(match)}
             >
-              {result}
+              {match}
             </button>
           ))}
         </div>
-      ) : null}
+      )}
     </div>
   );
 }

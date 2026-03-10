@@ -1,32 +1,74 @@
-from __future__ import annotations
 
-from fastapi import APIRouter, Query
+from typing import List
 
-from app.models import CalculateRequest, CalculateResponse, PokemonSummary
-from app.services.calculator import IVCalculatorService
-from app.services.pokeapi import PokeAPIService
+from fastapi import APIRouter, HTTPException, Query
+import requests
+
+from app.models.schemas import CalculateRequest, CalculateResponse, PokemonSummary, SearchResult
+from app.services.calculator import calculate
+from app.services.data import CHARACTERISTICS, get_pokemon_names, pokemon_summary
 
 router = APIRouter()
-pokeapi_service = PokeAPIService()
-calculator_service = IVCalculatorService(pokeapi_service)
+
+NATURES = [
+    "Adamant", "Bashful", "Bold", "Brave", "Calm", "Careful", "Docile", "Gentle",
+    "Hardy", "Hasty", "Impish", "Jolly", "Lax", "Lonely", "Mild", "Modest", "Naive",
+    "Naughty", "Quiet", "Quirky", "Rash", "Relaxed", "Sassy", "Serious", "Timid",
+]
 
 
 @router.get("/health")
-async def health() -> dict[str, str]:
-    return {"status": "ok"}
+def health() -> dict:
+    return {"ok": True}
 
 
-@router.get("/pokemon/search")
-async def search_pokemon(q: str = Query(default="", max_length=100), limit: int = Query(default=10, ge=1, le=20)) -> dict[str, list[str]]:
-    return {"results": await pokeapi_service.search_pokemon_names(q, limit=limit)}
+@router.get("/meta/generations")
+def generations() -> dict:
+    return {"generations": [{"value": i, "label": f"Generation {i}"} for i in range(1, 10)]}
+
+
+@router.get("/meta/characteristics")
+def characteristics() -> dict:
+    return {"characteristics": [entry["name"] for entry in CHARACTERISTICS]}
+
+
+@router.get("/meta/natures")
+def natures() -> dict:
+    return {"natures": NATURES}
+
+
+@router.get("/pokemon/search", response_model=List[SearchResult])
+def search_pokemon(q: str = Query("", min_length=0, max_length=100)) -> List[SearchResult]:
+    names = get_pokemon_names()
+    q = q.strip().lower()
+    if not q:
+        return [SearchResult(name=name) for name in names[:12]]
+    results = [name for name in names if q in name.lower()][:12]
+    return [SearchResult(name=name) for name in results]
 
 
 @router.get("/pokemon/{name}", response_model=PokemonSummary)
-async def get_pokemon(name: str) -> PokemonSummary:
-    pokemon = await pokeapi_service.get_pokemon(name)
-    return pokeapi_service.build_summary(pokemon)
+def pokemon(name: str, generation: int | None = None) -> PokemonSummary:
+    try:
+        return PokemonSummary(**pokemon_summary(name, generation))
+    except requests.HTTPError as exc:
+        raise HTTPException(status_code=404, detail="Pokémon not found.") from exc
 
 
 @router.post("/calculate", response_model=CalculateResponse)
-async def calculate(payload: CalculateRequest) -> CalculateResponse:
-    return await calculator_service.calculate(payload)
+def calculate_endpoint(payload: CalculateRequest) -> CalculateResponse:
+    try:
+        result = calculate(
+            pokemon_name=payload.pokemon_name,
+            generation=payload.generation,
+            level=payload.level,
+            nature_name=payload.nature,
+            characteristic_name=payload.characteristic,
+            observed_stats=payload.observed_stats,
+            effort_values=payload.effort_values,
+        )
+        return CalculateResponse(**result)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except requests.HTTPError as exc:
+        raise HTTPException(status_code=404, detail="Pokémon or nature lookup failed.") from exc
