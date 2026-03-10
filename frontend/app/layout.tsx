@@ -1,10 +1,9 @@
-
 import './globals.css';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
   title: 'Ultimate IV Calculator',
-  description: 'Professional Pokémon IV calculator webapp',
+  description: 'Professional Pokemon IV calculator webapp',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

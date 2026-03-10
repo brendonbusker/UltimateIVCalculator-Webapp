@@ -22,6 +22,11 @@ export type SearchResult = {
   name: string;
 };
 
+export type Option = {
+  label: string;
+  value: string | number;
+};
+
 export type PokemonSummary = {
   name: string;
   base_stats: Record<StatKey, number>;
@@ -47,4 +52,26 @@ export type CalculateResponse = {
   perfect_stats: string[];
   status: string;
   generation_notes: string[];
+};
+
+export type CalculatePayload = {
+  pokemon_name: string;
+  generation: number;
+  level: number;
+  nature?: string | null;
+  characteristic?: string | null;
+  observed_stats: Record<StatKey, number>;
+  effort_values: Record<StatKey, number>;
+};
+
+export type MetaGenerationsResponse = {
+  generations: Array<{ value: number; label: string }>;
+};
+
+export type MetaCharacteristicsResponse = {
+  characteristics: string[];
+};
+
+export type MetaNaturesResponse = {
+  natures: string[];
 };

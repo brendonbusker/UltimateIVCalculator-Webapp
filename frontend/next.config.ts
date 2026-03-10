@@ -1,6 +1,9 @@
 import type { NextConfig } from 'next';
 
 const isDevelopment = process.env.NODE_ENV !== 'production';
+const isStaticExport = process.env.NEXT_PUBLIC_DATA_MODE === 'static';
+const configuredBasePath = process.env.NEXT_PUBLIC_BASE_PATH ?? '';
+const normalizedBasePath = configuredBasePath === '/' ? '' : configuredBasePath.replace(/\/$/, '');
 
 const contentSecurityPolicy = [
   "default-src 'self'",
@@ -56,7 +59,12 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
+  output: isStaticExport ? 'export' : undefined,
+  trailingSlash: isStaticExport,
+  basePath: isStaticExport ? normalizedBasePath : undefined,
+  assetPrefix: isStaticExport && normalizedBasePath ? normalizedBasePath : undefined,
   images: {
+    unoptimized: isStaticExport,
     remotePatterns: [
       {
         protocol: 'https',
@@ -74,14 +82,18 @@ const nextConfig: NextConfig = {
     contentDispositionType: 'attachment',
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
   },
-  async headers() {
-    return [
-      {
-        source: '/:path*',
-        headers: securityHeaders,
-      },
-    ];
-  },
+  ...(isStaticExport
+    ? {}
+    : {
+        async headers() {
+          return [
+            {
+              source: '/:path*',
+              headers: securityHeaders,
+            },
+          ];
+        },
+      }),
 };
 
 export default nextConfig;

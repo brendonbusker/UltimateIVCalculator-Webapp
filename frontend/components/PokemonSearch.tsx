@@ -1,16 +1,12 @@
-﻿'use client';
+'use client';
 
 import { KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:8000/api';
+import { searchPokemon } from '@/lib/api';
 
 type Props = {
   value: string;
   onChange: (value: string) => void;
-};
-
-type SearchItem = {
-  name: string;
 };
 
 export default function PokemonSearch({ value, onChange }: Props) {
@@ -26,18 +22,12 @@ export default function PokemonSearch({ value, onChange }: Props) {
 
   useEffect(() => {
     let alive = true;
-    const controller = new AbortController();
 
     async function loadPokemon() {
       try {
-        const res = await fetch(`${API_URL}/pokemon/search?limit=0`, { signal: controller.signal, cache: 'force-cache' });
-        if (!res.ok) {
-          return;
-        }
-
-        const data = (await res.json()) as SearchItem[];
+        const names = await searchPokemon('');
         if (alive) {
-          setMatches(data.map((entry) => entry.name));
+          setMatches(names);
         }
       } catch {
       } finally {
@@ -51,7 +41,6 @@ export default function PokemonSearch({ value, onChange }: Props) {
 
     return () => {
       alive = false;
-      controller.abort();
     };
   }, []);
 
@@ -188,4 +177,3 @@ export default function PokemonSearch({ value, onChange }: Props) {
     </div>
   );
 }
-

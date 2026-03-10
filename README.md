@@ -39,6 +39,12 @@ npm run dev
 - Keep API docs disabled in production unless you intentionally want them public.
 - Re-run `npm audit` and your production build before each release.
 
+### GitHub Pages static site
+- Build the static Pages version from `frontend` with `npm run build:pages`.
+- Refresh the Pages search dataset with `npm run generate:pages-data` while the backend is running.
+- The `Deploy Pages` workflow publishes `frontend/out` on pushes to `main`.
+- The Pages version keeps the same UI, but it loads Pokemon data from public sources in the browser instead of your FastAPI backend.
+
 ## Notes
 - Gen 1 and Gen 2 use DV / Stat Exp rules.
 - HP DV is derived from the other DVs in Gen 1-2.

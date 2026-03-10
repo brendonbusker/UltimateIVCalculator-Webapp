@@ -4,22 +4,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 import PokemonSearch from '@/components/PokemonSearch';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
-const STAT_KEYS = ['hp', 'attack', 'defense', 'special-attack', 'special-defense', 'speed'] as const;
-type StatKey = typeof STAT_KEYS[number];
+import { calculateIVs, getCharacteristicsMeta, getGenerationsMeta, getNaturesMeta, getPokemon } from '@/lib/api';
+import { CalculatePayload, CalculateResponse, Option, PokemonSummary, STAT_KEYS, STAT_LABELS, StatKey } from '@/lib/types';
 
 const VISIBLE_STAT_KEYS = (generation: number): StatKey[] =>
   generation === 1 ? ['hp', 'attack', 'defense', 'special-attack', 'speed'] : [...STAT_KEYS];
-
-const STAT_LABELS: Record<StatKey, string> = {
-  hp: 'HP',
-  attack: 'ATK',
-  defense: 'DEF',
-  'special-attack': 'SPATK',
-  'special-defense': 'SPDEF',
-  speed: 'SPD',
-};
 
 const STAT_COLORS: Record<StatKey, string> = {
   hp: '#FF5959',
@@ -68,32 +57,6 @@ UI notes
 -----------------------
 - IV bars are a quick visual, not exact proof
 - the quality tag is based on the best matching IV`;
-
-type PokemonSummary = {
-  name: string;
-  types: string[];
-  abilities: string[];
-  height_m: number;
-  weight_kg: number;
-  forms: string[];
-  base_stats: Record<StatKey, number>;
-  sprites: { default?: string | null; shiny?: string | null };
-};
-
-type CalculateResponse = {
-  generation: number;
-  pokemon: PokemonSummary;
-  iv_ranges: Record<StatKey, string>;
-  quality: Record<StatKey, string>;
-  bars: Record<StatKey, number>;
-  exact_values: Record<StatKey, number[]>;
-  best_match: string;
-  perfect_stats: string[];
-  status: string;
-  generation_notes: string[];
-};
-
-type Option = { label: string; value: string | number };
 
 function Dropdown({
   label,
@@ -217,18 +180,21 @@ export default function Page() {
 
   useEffect(() => {
     Promise.all([
-      fetch(`${API_BASE}/meta/generations`).then((r) => r.json()),
-      fetch(`${API_BASE}/meta/characteristics`).then((r) => r.json()),
-      fetch(`${API_BASE}/meta/natures`).then((r) => r.json()),
-      fetch(`${API_BASE}/pokemon/Bulbasaur?generation=9`).then((r) => r.json()),
+      getGenerationsMeta(),
+      getCharacteristicsMeta(),
+      getNaturesMeta(),
+      getPokemon('Bulbasaur', 9),
     ])
       .then(([genData, charData, natureData, bulba]) => {
-        setGenerations((genData.generations || []).map((g: any) => ({ label: g.label, value: g.value })));
-        setCharacteristics((charData.characteristics || ['No Selection']).map((c: string) => ({ label: c, value: c })));
-        setNatures((natureData.natures || []).map((n: string) => ({ label: n, value: n })));
+        setGenerations((genData.generations || []).map((generationOption) => ({ label: generationOption.label, value: generationOption.value })));
+        setCharacteristics((charData.characteristics || ['No Selection']).map((entry) => ({ label: entry, value: entry })));
+        setNatures((natureData.natures || []).map((entry) => ({ label: entry, value: entry })));
         setPokemon(bulba);
       })
-      .catch(() => setStatus('Could not load startup data.'));
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : 'Could not load startup data.';
+        setStatus(message || 'Could not load startup data.');
+      });
   }, []);
 
   useEffect(() => {
@@ -330,37 +296,25 @@ export default function Page() {
         }
       }
 
-      const pokemonRes = await fetch(`${API_BASE}/pokemon/${encodeURIComponent(pokemonName)}?generation=${generation}`);
-      const pokemonData = await pokemonRes.json();
-      if (!pokemonRes.ok) {
-        setStatus(pokemonData.detail || 'Pokemon not found.');
-        return;
-      }
+      const pokemonData = await getPokemon(pokemonName, generation);
       setPokemon(pokemonData);
 
-      const calcRes = await fetch(`${API_BASE}/calculate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          pokemon_name: pokemonName,
-          generation,
-          level: levelNum,
-          nature: natureDisabled ? null : nature,
-          characteristic: characteristicDisabled ? null : characteristic,
-          observed_stats: observedPayload,
-          effort_values: effortPayload,
-        }),
-      });
-      const calcData = await calcRes.json();
-      if (!calcRes.ok) {
-        setStatus(calcData.detail || 'Calculation failed.');
-        setCalc(null);
-        return;
-      }
+      const payload: CalculatePayload = {
+        pokemon_name: pokemonName,
+        generation,
+        level: levelNum,
+        nature: natureDisabled ? null : nature,
+        characteristic: characteristicDisabled ? null : characteristic,
+        observed_stats: observedPayload,
+        effort_values: effortPayload,
+      };
+      const calcData = await calculateIVs(payload);
       setCalc(calcData);
       setStatus(calcData.status);
-    } catch {
-      setStatus('Network error while contacting the API.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Network error while contacting the API.';
+      setStatus(message || 'Network error while contacting the API.');
+      setCalc(null);
     }
   }
 
@@ -538,3 +492,6 @@ export default function Page() {
     </main>
   );
 }
+
+
+
