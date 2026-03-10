@@ -3,6 +3,8 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 
+import PokemonSearch from '@/components/PokemonSearch';
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
 const STAT_KEYS = ['hp', 'attack', 'defense', 'special-attack', 'special-defense', 'speed'] as const;
 type StatKey = typeof STAT_KEYS[number];
@@ -28,45 +30,44 @@ const STAT_COLORS: Record<StatKey, string> = {
   speed: '#FA92B2',
 };
 
-const CHANGELOG = `Version 2.0
+const CHANGELOG = `Version 2.1
 
-what's new
-• exact IV matching checks every IV from 0 to 31
-• bigger dashboard layout with info cards and stat quality tags
-• Pokémon info panel now shows typing, size, abilities, and forms
-• EV tracker shows total EVs used and how much room is left
-• impossible stat lines clearly show N/A and no-match status
-• cleaner sprite panel, faster repeated loads, and safer API handling
+new in 2.1
+- searchable Pokemon picker opens with the full list and filters as you type
+- regional and other supported alternate forms now calculate correctly
+- battle-only and mega forms are no longer shown in Pokemon search results
+- startup keeps the Bulbasaur preview while leaving the Pokemon field empty
+- dropdowns and search panels have cleaner chevrons, text, and scrollbar styling
+- UI copy and status text were cleaned up for a clearer, more polished experience
 
 how to use
-• enter species, level, nature, stats, and EVs
-• hit Calculate IVs
-• look at the IV range plus the quick quality label
-• if you know EVs are wrong, fix those first before trusting the range`;
-
+- enter species, level, nature, stats, and EVs
+- hit Calculate IVs
+- look at the IV range plus the quick quality label
+- if you know EVs are wrong, fix those first before trusting the range`;
 const HELP = `Quick tips
 
-Pokémon names
+Pokemon names
 -----------------------
-• spelling has to match the API
-• forms usually need the full form name
-• use the autocomplete box when possible
+- spelling has to match the API
+- forms usually need the full form name
+- use the Pokemon picker when possible
 
 Best results
 -----------------------
-• level 100 gives the tightest results
-• exact EVs matter a lot
-• comparing stats across multiple levels helps narrow spreads
+- level 100 gives the tightest results
+- exact EVs matter a lot
+- comparing stats across multiple levels helps narrow spreads
 
 What N/A means
 -----------------------
-• that stat is impossible for the entered species
-• or the level / EV / nature combo is wrong
+- that stat is impossible for the entered species
+- or the level / EV / nature combo is wrong
 
 UI notes
 -----------------------
-• IV bars are a quick visual, not exact proof
-• the quality tag is based on the best matching IV`;
+- IV bars are a quick visual, not exact proof
+- the quality tag is based on the best matching IV`;
 
 type PokemonSummary = {
   name: string;
@@ -92,7 +93,6 @@ type CalculateResponse = {
   generation_notes: string[];
 };
 
-type SearchItem = { name: string };
 type Option = { label: string; value: string | number };
 
 function Dropdown({
@@ -130,7 +130,7 @@ function Dropdown({
         onClick={() => !disabled && setOpen((v) => !v)}
       >
         <span>{selected?.label ?? String(value)}</span>
-        <span className="chevron">▾</span>
+        <span className="chevron" aria-hidden="true" />
       </button>
       {open && !disabled && (
         <div className="search-panel">
@@ -158,7 +158,7 @@ export default function Page() {
   const [sidebarTab, setSidebarTab] = useState<'updates' | 'help'>('updates');
   const [spriteTab, setSpriteTab] = useState<'default' | 'shiny'>('default');
 
-  const [pokemonName, setPokemonName] = useState('Bulbasaur');
+  const [pokemonName, setPokemonName] = useState('');
   const [generation, setGeneration] = useState(9);
   const [level, setLevel] = useState('100');
   const [nature, setNature] = useState('Adamant');
@@ -167,12 +167,10 @@ export default function Page() {
   const [generations, setGenerations] = useState<Option[]>([]);
   const [natures, setNatures] = useState<Option[]>([]);
   const [characteristics, setCharacteristics] = useState<Option[]>([{ label: 'No Selection', value: 'No Selection' }]);
-  const [searchResults, setSearchResults] = useState<SearchItem[]>([]);
-  const [showSearch, setShowSearch] = useState(false);
 
   const [pokemon, setPokemon] = useState<PokemonSummary | null>(null);
   const [calc, setCalc] = useState<CalculateResponse | null>(null);
-  const [status, setStatus] = useState('Ready. Load a Pokémon and calculate IVs.');
+  const [status, setStatus] = useState('Ready. Load a Pokemon and calculate IVs.');
 
   const [observedStats, setObservedStats] = useState<Record<StatKey, string>>({
     hp: '',
@@ -192,7 +190,6 @@ export default function Page() {
     speed: '0',
   });
 
-  const searchWrapRef = useRef<HTMLDivElement | null>(null);
 
   const natureDisabled = generation <= 2;
   const characteristicDisabled = generation <= 3;
@@ -202,10 +199,10 @@ export default function Page() {
   const visibleStats = VISIBLE_STAT_KEYS(generation);
 
   const summaryText = useMemo(() => {
-    if (generation <= 2) return 'Stat Exp values: 0-65535 per stat • no total cap';
+    if (generation <= 2) return 'Stat Exp values: 0-65535 per stat | no total cap';
     const total = STAT_KEYS.reduce((sum, key) => sum + (Number(efforts[key]) || 0), 0);
     const remain = Math.max(0, 510 - total);
-    return `EV Total: ${total} / 510 • ${remain} left`;
+    return `EV Total: ${total} / 510 | ${remain} left`;
   }, [efforts, generation]);
 
   useEffect(() => {
@@ -249,31 +246,6 @@ export default function Page() {
       setEfforts((prev) => ({ ...prev, 'special-defense': prev['special-attack'] }));
     }
   }, [generation]);
-
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (searchWrapRef.current && !searchWrapRef.current.contains(e.target as Node)) setShowSearch(false);
-    }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, []);
-
-  async function runSearch(value: string) {
-    setPokemonName(value);
-    if (!value.trim()) {
-      setShowSearch(false);
-      setSearchResults([]);
-      return;
-    }
-    try {
-      const res = await fetch(`${API_BASE}/pokemon/search?q=${encodeURIComponent(value)}`);
-      const data: SearchItem[] = await res.json();
-      setSearchResults(data);
-      setShowSearch(true);
-    } catch {
-      setShowSearch(false);
-    }
-  }
 
   function setObserved(key: StatKey, value: string) {
     const clean = value.replace(/[^0-9]/g, '');
@@ -322,7 +294,7 @@ export default function Page() {
   async function loadAndCalculate() {
     try {
       if (!pokemonName.trim()) {
-        setStatus('Enter a Pokémon name.');
+        setStatus('Enter a Pokemon name.');
         return;
       }
       const levelNum = Number(level);
@@ -361,7 +333,7 @@ export default function Page() {
       const pokemonRes = await fetch(`${API_BASE}/pokemon/${encodeURIComponent(pokemonName)}?generation=${generation}`);
       const pokemonData = await pokemonRes.json();
       if (!pokemonRes.ok) {
-        setStatus(pokemonData.detail || 'Pokémon not found.');
+        setStatus(pokemonData.detail || 'Pokemon not found.');
         return;
       }
       setPokemon(pokemonData);
@@ -446,7 +418,7 @@ export default function Page() {
           </div>
           <div>
             <p><strong>Abilities:</strong> {Array.isArray(displayPokemon?.abilities) ? displayPokemon.abilities.join(', ') : '-'}</p>
-            <p><strong>Size:</strong> {displayPokemon ? `${displayPokemon.height_m} m • ${displayPokemon.weight_kg} kg` : '-'}</p>
+            <p><strong>Size:</strong> {displayPokemon ? `${displayPokemon.height_m} m | ${displayPokemon.weight_kg} kg` : '-'}</p>
           </div>
           <div>
             <p><strong>Forms:</strong> {Array.isArray(displayPokemon?.forms) ? displayPokemon.forms.join(', ') : '-'}</p>
@@ -456,31 +428,9 @@ export default function Page() {
         <section className="left-column">
           <div className="card controls-card">
             <div className="controls-grid">
-              <div ref={searchWrapRef} className="search-wrap field-group">
-                <label>Pokémon</label>
-                <input
-                  className="field-input"
-                  value={pokemonName}
-                  onChange={(e) => runSearch(e.target.value)}
-                  onFocus={() => { if (searchResults.length) setShowSearch(true); }}
-                />
-                {showSearch && searchResults.length > 0 && (
-                  <div className="search-panel">
-                    {searchResults.map((item) => (
-                      <button
-                        key={item.name}
-                        className="search-item"
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          setPokemonName(item.name);
-                          setShowSearch(false);
-                        }}
-                      >
-                        {item.name}
-                      </button>
-                    ))}
-                  </div>
-                )}
+              <div className="field-group">
+                <label>Pokemon</label>
+                <PokemonSearch value={pokemonName} onChange={setPokemonName} />
               </div>
 
               <Dropdown label="Generation" value={generation} options={generations} onSelect={(v) => setGeneration(Number(v))} />
@@ -499,7 +449,7 @@ export default function Page() {
               <div className="button-row">
                 <button className="secondary-button" onClick={clearStats}>Clear Stats</button>
                 <button className="secondary-button" onClick={clearEfforts}>Clear {generation <= 2 ? 'Stat Exp' : 'EVs'}</button>
-                <button className="primary-button" onClick={loadAndCalculate}>Load Pokémon &amp; Calculate</button>
+                <button className="primary-button" onClick={loadAndCalculate}>Load Pokemon &amp; Calculate</button>
               </div>
             </div>
           </div>
@@ -569,7 +519,7 @@ export default function Page() {
             <div className="readout-grid">
               <span>Species</span><span>{displayPokemon?.name || '-'}</span>
               <span>Typing</span><span>{Array.isArray(displayPokemon?.types) ? displayPokemon.types.join(' / ') : '-'}</span>
-              <span>Size</span><span>{displayPokemon ? `${displayPokemon.height_m} m • ${displayPokemon.weight_kg} kg` : '-'}</span>
+              <span>Size</span><span>{displayPokemon ? `${displayPokemon.height_m} m | ${displayPokemon.weight_kg} kg` : '-'}</span>
               <span>Forms</span><span>{Array.isArray(displayPokemon?.forms) ? displayPokemon.forms.join(', ') : '-'}</span>
             </div>
           </div>
@@ -588,4 +538,3 @@ export default function Page() {
     </main>
   );
 }
-

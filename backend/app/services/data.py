@@ -16,6 +16,8 @@ HISTORICAL_RAW_URL = "https://raw.githubusercontent.com/zhenga8533/pokedb/data/g
 BUNDLED_CACHE_PATH = Path(__file__).resolve().parents[1] / "data" / "historical_stats.json"
 DEFAULT_RUNTIME_CACHE_PATH = Path(__file__).resolve().parents[2] / ".runtime" / "historical_stats.json"
 CACHE_PATH = Path(os.getenv("HISTORICAL_CACHE_PATH", str(DEFAULT_RUNTIME_CACHE_PATH)))
+DEFAULT_SEARCHABLE_NAMES_CACHE_PATH = Path(__file__).resolve().parents[2] / ".runtime" / "searchable_pokemon_names.json"
+SEARCHABLE_NAMES_CACHE_PATH = Path(os.getenv("SEARCHABLE_POKEMON_CACHE_PATH", str(DEFAULT_SEARCHABLE_NAMES_CACHE_PATH)))
 
 STAT_KEYS = ["hp", "attack", "defense", "special-attack", "special-defense", "speed"]
 
@@ -54,6 +56,32 @@ CHARACTERISTICS: List[Dict[str, object]] = [
 ]
 
 _SESSION = requests.Session()
+SPECIES_GENERATION_LOOKUP = {"i": 1, "ii": 2, "iii": 3, "iv": 4, "v": 5, "vi": 6, "vii": 7, "viii": 8, "ix": 9}
+VERSION_GROUP_GENERATION_LOOKUP = {
+    "red-blue": 1,
+    "yellow": 1,
+    "gold-silver": 2,
+    "crystal": 2,
+    "ruby-sapphire": 3,
+    "emerald": 3,
+    "firered-leafgreen": 3,
+    "colosseum": 3,
+    "xd": 3,
+    "diamond-pearl": 4,
+    "platinum": 4,
+    "heartgold-soulsilver": 4,
+    "black-white": 5,
+    "black-2-white-2": 5,
+    "x-y": 6,
+    "omega-ruby-alpha-sapphire": 6,
+    "sun-moon": 7,
+    "ultra-sun-ultra-moon": 7,
+    "lets-go-pikachu-lets-go-eevee": 7,
+    "sword-shield": 8,
+    "brilliant-diamond-and-shining-pearl": 8,
+    "legends-arceus": 8,
+    "scarlet-violet": 9,
+}
 
 
 def _load_json(path: Path) -> dict:
@@ -86,6 +114,25 @@ def _write_cache(data: dict) -> None:
     temp_path.replace(CACHE_PATH)
 
 
+def _load_string_list(path: Path) -> List[str]:
+    if not path.exists():
+        return []
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+    if not isinstance(payload, list):
+        return []
+    return [item for item in payload if isinstance(item, str)]
+
+
+def _write_string_list(path: Path, values: List[str]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = path.with_suffix(f"{path.suffix}.tmp")
+    temp_path.write_text(json.dumps(values, indent=2), encoding="utf-8")
+    temp_path.replace(path)
+
+
 @lru_cache(maxsize=1)
 def get_pokemon_names() -> List[str]:
     response = _SESSION.get(POKEMON_LIST_URL, timeout=API_TIMEOUT)
@@ -97,6 +144,18 @@ def get_pokemon_names() -> List[str]:
 @lru_cache(maxsize=2048)
 def get_pokemon(name: str) -> dict:
     response = _SESSION.get(POKEMON_URL.format(name=name.lower().strip()), timeout=API_TIMEOUT)
+    response.raise_for_status()
+    return response.json()
+
+
+@lru_cache(maxsize=2048)
+def get_pokemon_form(name: str) -> dict:
+    pokemon = get_pokemon(name)
+    forms = pokemon.get("forms", [])
+    if not forms:
+        return {}
+
+    response = _SESSION.get(forms[0]["url"], timeout=API_TIMEOUT)
     response.raise_for_status()
     return response.json()
 
@@ -186,12 +245,48 @@ def pokemon_summary(name: str, generation: Optional[int] = None) -> Dict[str, ob
     }
 
 
-def introduced_generation(name: str) -> int:
-    species = get_species(name)
+def _species_generation_to_int(species: dict) -> int:
     generation_name = species["generation"]["name"]
     roman = generation_name.split("-")[-1]
-    lookup = {"i": 1, "ii": 2, "iii": 3, "iv": 4, "v": 5, "vi": 6, "vii": 7, "viii": 8, "ix": 9}
-    return lookup[roman]
+    return SPECIES_GENERATION_LOOKUP[roman]
+
+
+def introduced_generation(name: str) -> int:
+    try:
+        return _species_generation_to_int(get_species(name))
+    except requests.HTTPError:
+        form = get_pokemon_form(name)
+        version_group_name = form.get("version_group", {}).get("name")
+        if version_group_name in VERSION_GROUP_GENERATION_LOOKUP:
+            return VERSION_GROUP_GENERATION_LOOKUP[version_group_name]
+
+        species_name = get_pokemon(name).get("species", {}).get("name")
+        if species_name:
+            return _species_generation_to_int(get_species(species_name))
+        raise
+
+
+def is_searchable_pokemon(name: str) -> bool:
+    if "-" not in name:
+        return True
+
+    try:
+        form = get_pokemon_form(name)
+    except requests.HTTPError:
+        return True
+
+    return not form.get("is_battle_only") and not form.get("is_mega")
+
+
+@lru_cache(maxsize=1)
+def get_searchable_pokemon_names() -> List[str]:
+    cached_names = _load_string_list(SEARCHABLE_NAMES_CACHE_PATH)
+    if cached_names:
+        return cached_names
+
+    filtered_names = [name for name in get_pokemon_names() if is_searchable_pokemon(name)]
+    _write_string_list(SEARCHABLE_NAMES_CACHE_PATH, filtered_names)
+    return filtered_names
 
 
 def nature_modifiers(nature_name: Optional[str]) -> Dict[str, float]:

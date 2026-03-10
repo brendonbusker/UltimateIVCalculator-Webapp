@@ -5,7 +5,7 @@ import requests
 
 from app.models.schemas import CalculateRequest, CalculateResponse, PokemonSummary, SearchResult
 from app.services.calculator import calculate
-from app.services.data import CHARACTERISTICS, get_pokemon_names, pokemon_summary
+from app.services.data import CHARACTERISTICS, get_searchable_pokemon_names, pokemon_summary
 
 router = APIRouter()
 
@@ -37,12 +37,15 @@ def natures() -> dict:
 
 
 @router.get("/pokemon/search", response_model=List[SearchResult])
-def search_pokemon(q: str = Query("", min_length=0, max_length=100)) -> List[SearchResult]:
-    names = get_pokemon_names()
+def search_pokemon(
+    q: str = Query("", min_length=0, max_length=100),
+    limit: int = Query(12, ge=0, le=2000),
+) -> List[SearchResult]:
+    names = sorted(get_searchable_pokemon_names(), key=str.casefold)
     q = q.strip().lower()
-    if not q:
-        return [SearchResult(name=name) for name in names[:12]]
-    results = [name for name in names if q in name.lower()][:12]
+    results = names if not q else [name for name in names if q in name.lower()]
+    if limit:
+        results = results[:limit]
     return [SearchResult(name=name) for name in results]
 
 

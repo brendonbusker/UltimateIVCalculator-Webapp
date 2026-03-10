@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -7,44 +7,60 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:8000/api';
 type Props = {
   value: string;
   onChange: (value: string) => void;
-  onSelect?: (value: string) => void;
 };
 
 type SearchItem = {
   name: string;
 };
 
-export default function PokemonSearch({ value, onChange, onSelect }: Props) {
+export default function PokemonSearch({ value, onChange }: Props) {
   const [matches, setMatches] = useState<string[]>([]);
+  const [draftValue, setDraftValue] = useState(value);
   const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [isFiltering, setIsFiltering] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   useEffect(() => {
+    let alive = true;
     const controller = new AbortController();
-    const query = value.trim();
 
-    const timer = setTimeout(async () => {
+    async function loadPokemon() {
       try {
-        const url = `${API_URL}/pokemon/search?q=${encodeURIComponent(query)}`;
-        const res = await fetch(url, { signal: controller.signal });
+        const res = await fetch(`${API_URL}/pokemon/search?limit=0`, { signal: controller.signal, cache: 'force-cache' });
         if (!res.ok) {
           return;
         }
 
         const data = (await res.json()) as SearchItem[];
-        const nextMatches = data.map((entry) => entry.name);
-        setMatches(nextMatches);
-        setActiveIndex(0);
-        setOpen(nextMatches.length > 0 && document.activeElement?.tagName === 'INPUT');
-      } catch {}
-    }, 120);
+        if (alive) {
+          setMatches(data.map((entry) => entry.name));
+        }
+      } catch {
+      } finally {
+        if (alive) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadPokemon();
 
     return () => {
-      clearTimeout(timer);
+      alive = false;
       controller.abort();
     };
-  }, [value]);
+  }, []);
+
+  useEffect(() => {
+    if (!open) {
+      setDraftValue(value);
+      setIsFiltering(false);
+    }
+  }, [open, value]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -57,54 +73,112 @@ export default function PokemonSearch({ value, onChange, onSelect }: Props) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const hasMatches = useMemo(() => open && matches.length > 0, [open, matches]);
+  const filteredMatches = useMemo(() => {
+    if (!isFiltering) {
+      return matches;
+    }
+
+    const normalizedQuery = draftValue.trim().toLowerCase();
+    if (!normalizedQuery) {
+      return matches;
+    }
+
+    return matches.filter((match) => match.toLowerCase().includes(normalizedQuery));
+  }, [draftValue, isFiltering, matches]);
+
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [draftValue, isFiltering]);
+
+  useEffect(() => {
+    const activeItem = optionRefs.current[activeIndex];
+    if (open && activeItem) {
+      activeItem.scrollIntoView({ block: 'nearest' });
+    }
+  }, [activeIndex, filteredMatches, open]);
+
+  function openMenu() {
+    setOpen(true);
+    setDraftValue(value);
+    setIsFiltering(false);
+    window.requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    });
+  }
 
   function selectName(name: string) {
     onChange(name);
-    onSelect?.(name);
+    setDraftValue(name);
+    setIsFiltering(false);
     setOpen(false);
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    if (!hasMatches) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      setOpen(false);
+      return;
+    }
+
+    if (!filteredMatches.length) {
+      return;
+    }
 
     if (event.key === 'ArrowDown') {
       event.preventDefault();
-      setActiveIndex((prev) => (prev + 1) % matches.length);
+      setActiveIndex((prev) => (prev + 1) % filteredMatches.length);
     } else if (event.key === 'ArrowUp') {
       event.preventDefault();
-      setActiveIndex((prev) => (prev - 1 + matches.length) % matches.length);
+      setActiveIndex((prev) => (prev - 1 + filteredMatches.length) % filteredMatches.length);
     } else if (event.key === 'Enter') {
       event.preventDefault();
-      selectName(matches[activeIndex]);
-    } else if (event.key === 'Escape') {
-      setOpen(false);
+      selectName(filteredMatches[activeIndex]);
     }
   }
 
   return (
     <div className="search-shell" ref={containerRef}>
       <input
-        className="input"
-        value={value}
-        onChange={(e) => {
-          onChange(e.target.value);
-          setOpen(true);
+        ref={inputRef}
+        className="field-input search-input"
+        value={open ? draftValue : value}
+        onFocus={openMenu}
+        onClick={() => {
+          if (!open) {
+            openMenu();
+          }
         }}
-        onFocus={() => setOpen(matches.length > 0)}
+        onChange={(event) => {
+          const nextValue = event.target.value;
+          setDraftValue(nextValue);
+          setIsFiltering(true);
+          onChange(nextValue);
+        }}
         onKeyDown={handleKeyDown}
-        placeholder="Start typing a Pokemon..."
+        placeholder=""
+        aria-expanded={open}
+        aria-haspopup="listbox"
       />
+      <span className="chevron search-chevron" aria-hidden="true" />
 
-      {hasMatches && (
-        <div className="search-results card">
-          {matches.map((match, index) => (
+      {open && (
+        <div className="search-panel" role="listbox" aria-label="Pokemon options">
+          {loading ? <div className="search-empty">Loading Pokemon...</div> : null}
+          {!loading && filteredMatches.length === 0 ? <div className="search-empty">No Pokemon found.</div> : null}
+          {!loading && filteredMatches.map((match, index) => (
             <button
               key={match}
+              ref={(element) => {
+                optionRefs.current[index] = element;
+              }}
               type="button"
-              className={`search-option ${index === activeIndex ? 'active' : ''}`}
+              className={`search-item ${index === activeIndex ? 'active' : ''}`}
               onMouseEnter={() => setActiveIndex(index)}
-              onClick={() => selectName(match)}
+              onMouseDown={(event) => {
+                event.preventDefault();
+                selectName(match);
+              }}
             >
               {match}
             </button>
@@ -114,3 +188,4 @@ export default function PokemonSearch({ value, onChange, onSelect }: Props) {
     </div>
   );
 }
+
