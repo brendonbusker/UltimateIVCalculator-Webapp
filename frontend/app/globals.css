@@ -126,7 +126,16 @@ button, input { font: inherit; }
   outline: none;
 }
 .field-input:focus, .table-input:focus { border-color: rgba(111,149,255,.75); box-shadow: 0 0 0 3px rgba(111,149,255,.14); }
-.static-field { display: flex; align-items: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.static-field {
+  display: flex;
+  align-items: center;
+  min-height: 50px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
 .summary-field { grid-column: span 2; }
 .dropdown-wrap.disabled { opacity: .7; }
 .field-button { display: flex; align-items: center; justify-content: space-between; text-align: left; cursor: pointer; }
@@ -228,3 +237,4 @@ button, input { font: inherit; }
   .button-row > * { flex: 1 1 auto; }
   .readout-grid { grid-template-columns: 1fr; }
 }
+

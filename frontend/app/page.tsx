@@ -398,7 +398,7 @@ export default function Page() {
     <main className="app-shell">
       <aside className="sidebar">
         <div className="sidebar-card brand-card">
-          <h1>Calculator</h1>
+          <h1>IV Calculator</h1>
           <a href="https://github.com/brendonbusker" target="_blank" rel="noreferrer" className="github-link">https://github.com/brendonbusker</a>
         </div>
 
@@ -588,3 +588,4 @@ export default function Page() {
     </main>
   );
 }
+
