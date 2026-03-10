@@ -1,6 +1,6 @@
-
 import json
 import math
+import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -13,7 +13,9 @@ POKEMON_URL = "https://pokeapi.co/api/v2/pokemon/{name}"
 NATURE_URL = "https://pokeapi.co/api/v2/nature/{name}"
 SPECIES_URL = "https://pokeapi.co/api/v2/pokemon-species/{name}"
 HISTORICAL_RAW_URL = "https://raw.githubusercontent.com/zhenga8533/pokedb/data/gen{generation}/pokemon/default/{slug}.json"
-CACHE_PATH = Path(__file__).resolve().parents[1] / "data" / "historical_stats.json"
+BUNDLED_CACHE_PATH = Path(__file__).resolve().parents[1] / "data" / "historical_stats.json"
+DEFAULT_RUNTIME_CACHE_PATH = Path(__file__).resolve().parents[2] / ".runtime" / "historical_stats.json"
+CACHE_PATH = Path(os.getenv("HISTORICAL_CACHE_PATH", str(DEFAULT_RUNTIME_CACHE_PATH)))
 
 STAT_KEYS = ["hp", "attack", "defense", "special-attack", "special-defense", "speed"]
 
@@ -54,17 +56,34 @@ CHARACTERISTICS: List[Dict[str, object]] = [
 _SESSION = requests.Session()
 
 
-def _read_cache() -> dict:
-    if not CACHE_PATH.exists():
+def _load_json(path: Path) -> dict:
+    if not path.exists():
         return {}
     try:
-        return json.loads(CACHE_PATH.read_text(encoding="utf-8"))
+        return json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return {}
 
 
+def _read_cache() -> dict:
+    bundled = _load_json(BUNDLED_CACHE_PATH)
+    runtime = _load_json(CACHE_PATH)
+    merged = dict(bundled)
+
+    for slug, species_data in runtime.items():
+        if isinstance(species_data, dict) and isinstance(merged.get(slug), dict):
+            merged[slug] = {**merged[slug], **species_data}
+        else:
+            merged[slug] = species_data
+
+    return merged
+
+
 def _write_cache(data: dict) -> None:
-    CACHE_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = CACHE_PATH.with_suffix(f"{CACHE_PATH.suffix}.tmp")
+    temp_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    temp_path.replace(CACHE_PATH)
 
 
 @lru_cache(maxsize=1)
