@@ -1,3 +1,4 @@
+import { memoRequest } from './request-cache';
 import { DATA_MODE } from '@/lib/app-config';
 import { calculateStaticIVs, getStaticCharacteristics, getStaticGenerations, getStaticNatures, getStaticPokemon, searchStaticPokemon } from '@/lib/static-api';
 import {
@@ -16,8 +17,8 @@ async function getErrorMessage(response: Response, fallback: string): Promise<st
   const contentType = response.headers.get('content-type') ?? '';
 
   if (contentType.includes('application/json')) {
-    const payload = (await response.json()) as { detail?: string };
-    return payload.detail || fallback;
+    const payload = (await response.json()) as { detail?: string | Array<{ msg?: string }> };
+    return typeof payload.detail === 'string' ? payload.detail : Array.isArray(payload.detail) ? payload.detail.map((entry) => entry.msg || fallback).join(' ') : fallback;
   }
 
   const text = await response.text();
@@ -60,7 +61,11 @@ export async function getNaturesMeta(): Promise<MetaNaturesResponse> {
   return (await response.json()) as MetaNaturesResponse;
 }
 
-export async function searchPokemon(query: string): Promise<string[]> {
+const searchCache = new Map<string, Promise<string[]>>();
+export function searchPokemon(query: string): Promise<string[]> {
+  return memoRequest(searchCache, query, () => searchPokemonRequest(query));
+}
+async function searchPokemonRequest(query: string): Promise<string[]> {
   if (DATA_MODE === 'static') {
     return searchStaticPokemon(query);
   }
@@ -75,7 +80,7 @@ export async function searchPokemon(query: string): Promise<string[]> {
   return payload.map((entry) => entry.name);
 }
 
-export async function getPokemon(name: string, generation?: number): Promise<PokemonSummary> {
+export async function getPokemon(name: string, generation?: number, signal?: AbortSignal): Promise<PokemonSummary> {
   if (DATA_MODE === 'static') {
     return getStaticPokemon(name, generation);
   }
@@ -86,7 +91,7 @@ export async function getPokemon(name: string, generation?: number): Promise<Pok
   }
 
   const suffix = params.size ? `?${params.toString()}` : '';
-  const response = await fetch(`${API_BASE_URL}/pokemon/${encodeURIComponent(name)}${suffix}`, { cache: 'no-store' });
+  const response = await fetch(`${API_BASE_URL}/pokemon/${encodeURIComponent(name)}${suffix}`, { cache: 'no-store', signal });
   if (!response.ok) {
     throw new Error(await getErrorMessage(response, 'Could not load Pokemon details.'));
   }
@@ -94,13 +99,14 @@ export async function getPokemon(name: string, generation?: number): Promise<Pok
   return (await response.json()) as PokemonSummary;
 }
 
-export async function calculateIVs(payload: CalculatePayload): Promise<CalculateResponse> {
+export async function calculateIVs(payload: CalculatePayload, signal?: AbortSignal): Promise<CalculateResponse> {
   if (DATA_MODE === 'static') {
     return calculateStaticIVs(payload);
   }
 
   const response = await fetch(`${API_BASE_URL}/calculate`, {
     method: 'POST',
+    signal,
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });

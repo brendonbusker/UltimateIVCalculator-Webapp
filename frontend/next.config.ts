@@ -11,6 +11,7 @@ const contentSecurityPolicy = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https://raw.githubusercontent.com https://img.pokemondb.net https://archives.bulbagarden.net",
   "font-src 'self' data:",
+  "media-src 'self' https://raw.githubusercontent.com",
   "connect-src 'self' http://127.0.0.1:8000 http://localhost:8000 https:",
   "object-src 'none'",
   "base-uri 'self'",

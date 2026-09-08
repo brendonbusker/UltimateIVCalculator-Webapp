@@ -182,7 +182,7 @@ def _normalize_historical_stats(stats: dict, generation: int) -> Dict[str, int]:
     sp_atk = int(stats.get("special_attack", stats.get("special-attack", 0)))
     sp_def = int(stats.get("special_defense", stats.get("special-defense", 0)))
     if generation == 1:
-        special = sp_atk or sp_def
+        special = int(stats.get("special", 0)) or sp_atk or sp_def
         sp_atk = special
         sp_def = special
     return {
@@ -201,7 +201,10 @@ def get_historical_base_stats(name: str, generation: int) -> Optional[Dict[str, 
     species_data = cache.get(slug, {})
     gen_key = str(generation)
     if gen_key in species_data:
-        return species_data[gen_key]
+        cached = species_data[gen_key]
+        # Older normalizers could persist zero Special for the Gen 1 source shape.
+        if generation != 1 or (cached.get("special-attack", 0) > 0 and cached.get("special-defense", 0) > 0):
+            return cached
 
     try:
         response = _SESSION.get(HISTORICAL_RAW_URL.format(generation=generation, slug=slug), timeout=API_TIMEOUT)

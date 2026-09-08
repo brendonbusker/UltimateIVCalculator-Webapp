@@ -1,177 +1,163 @@
 'use client';
-
-import { KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
-
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { searchPokemon } from '@/lib/api';
 
 type Props = {
   value: string;
   onChange: (value: string) => void;
+  onSelect: (value: string) => void;
 };
-
-export default function PokemonSearch({ value, onChange }: Props) {
-  const [matches, setMatches] = useState<string[]>([]);
-  const [draftValue, setDraftValue] = useState(value);
+export default function PokemonSearch({ value, onChange, onSelect }: Props) {
+  const [names, setNames] = useState<string[]>([]);
   const [open, setOpen] = useState(false);
+  const [filter, setFilter] = useState(false);
+  const [active, setActive] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [isFiltering, setIsFiltering] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
-
+  const [error, setError] = useState(false);
+  const [retry, setRetry] = useState(0);
+  const id = useId();
+  const panel = useRef<HTMLDivElement>(null);
   useEffect(() => {
     let alive = true;
-
-    async function loadPokemon() {
-      try {
-        const names = await searchPokemon('');
-        if (alive) {
-          setMatches(names);
-        }
-      } catch {
-      } finally {
-        if (alive) {
-          setLoading(false);
-        }
-      }
-    }
-
-    loadPokemon();
-
+    setLoading(true);
+    setError(false);
+    void searchPokemon('')
+      .then((data) => {
+        if (alive) setNames(data);
+      })
+      .catch(() => {
+        if (alive) setError(true);
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
     return () => {
       alive = false;
     };
-  }, []);
-
+  }, [retry]);
+  const matches = useMemo(
+    () =>
+      filter
+        ? names.filter((name) =>
+            name.toLowerCase().includes(value.trim().toLowerCase()),
+          )
+        : names,
+    [names, value, filter],
+  );
   useEffect(() => {
-    if (!open) {
-      setDraftValue(value);
-      setIsFiltering(false);
-    }
-  }, [open, value]);
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (!containerRef.current?.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    }
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const filteredMatches = useMemo(() => {
-    if (!isFiltering) {
-      return matches;
-    }
-
-    const normalizedQuery = draftValue.trim().toLowerCase();
-    if (!normalizedQuery) {
-      return matches;
-    }
-
-    return matches.filter((match) => match.toLowerCase().includes(normalizedQuery));
-  }, [draftValue, isFiltering, matches]);
-
-  useEffect(() => {
-    setActiveIndex(0);
-  }, [draftValue, isFiltering]);
-
-  useEffect(() => {
-    const activeItem = optionRefs.current[activeIndex];
-    if (open && activeItem) {
-      activeItem.scrollIntoView({ block: 'nearest' });
-    }
-  }, [activeIndex, filteredMatches, open]);
-
-  function openMenu() {
-    setOpen(true);
-    setDraftValue(value);
-    setIsFiltering(false);
-    window.requestAnimationFrame(() => {
-      inputRef.current?.focus();
-      inputRef.current?.select();
-    });
-  }
-
-  function selectName(name: string) {
-    onChange(name);
-    setDraftValue(name);
-    setIsFiltering(false);
+    if (open)
+      panel.current
+        ?.querySelector(`[data-index="${active}"]`)
+        ?.scrollIntoView({ block: 'nearest' });
+  }, [active, open]);
+  function choose(name: string) {
+    onSelect(name);
     setOpen(false);
   }
-
-  function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      setOpen(false);
-      return;
-    }
-
-    if (!filteredMatches.length) {
-      return;
-    }
-
-    if (event.key === 'ArrowDown') {
-      event.preventDefault();
-      setActiveIndex((prev) => (prev + 1) % filteredMatches.length);
-    } else if (event.key === 'ArrowUp') {
-      event.preventDefault();
-      setActiveIndex((prev) => (prev - 1 + filteredMatches.length) % filteredMatches.length);
-    } else if (event.key === 'Enter') {
-      event.preventDefault();
-      selectName(filteredMatches[activeIndex]);
-    }
-  }
-
   return (
-    <div className="search-shell" ref={containerRef}>
+    <div
+      className="search-shell"
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) {
+          setOpen(false);
+          const exact = names.find(
+            (name) => name.toLowerCase() === value.trim().toLowerCase(),
+          );
+          if (exact) onSelect(exact);
+        }
+      }}
+    >
       <input
-        ref={inputRef}
-        className="field-input search-input"
-        value={open ? draftValue : value}
-        onFocus={openMenu}
-        onClick={() => {
-          if (!open) {
-            openMenu();
+        id="pokemon-input"
+        className="field-input"
+        role="combobox"
+        autoComplete="off"
+        spellCheck={false}
+        aria-autocomplete="list"
+        aria-controls={id}
+        aria-expanded={open}
+        aria-activedescendant={
+          open && matches[active] ? `${id}-${active}` : undefined
+        }
+        value={value}
+        placeholder="Select Pokémon"
+        onFocus={() => {
+          setOpen(true);
+          setFilter(false);
+          setActive(0);
+        }}
+        onClick={() => setOpen(true)}
+        onChange={(event) => {
+          onChange(event.target.value);
+          setFilter(true);
+          setActive(0);
+          setOpen(true);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            setOpen(false);
+          }
+          if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            event.preventDefault();
+            setOpen(true);
+            setActive((index) =>
+              open
+                ? Math.max(
+                    0,
+                    Math.min(
+                      matches.length - 1,
+                      index + (event.key === 'ArrowDown' ? 1 : -1),
+                    ),
+                  )
+                : 0,
+            );
+          }
+          if (event.key === 'Enter' && open) {
+            event.preventDefault();
+            choose(matches[active] || value);
           }
         }}
-        onChange={(event) => {
-          const nextValue = event.target.value;
-          setDraftValue(nextValue);
-          setIsFiltering(true);
-          onChange(nextValue);
-        }}
-        onKeyDown={handleKeyDown}
-        placeholder=""
-        aria-expanded={open}
-        aria-haspopup="listbox"
       />
-      <span className="chevron search-chevron" aria-hidden="true" />
-
+      <span className="search-chevron" aria-hidden="true">
+        ⌄
+      </span>
       {open && (
-        <div className="search-panel" role="listbox" aria-label="Pokemon options">
-          {loading ? <div className="search-empty">Loading Pokemon...</div> : null}
-          {!loading && filteredMatches.length === 0 ? <div className="search-empty">No Pokemon found.</div> : null}
-          {!loading && filteredMatches.map((match, index) => (
-            <button
-              key={match}
-              ref={(element) => {
-                optionRefs.current[index] = element;
-              }}
-              type="button"
-              className={`search-item ${index === activeIndex ? 'active' : ''}`}
-              onMouseEnter={() => setActiveIndex(index)}
-              onMouseDown={(event) => {
-                event.preventDefault();
-                selectName(match);
-              }}
-            >
-              {match}
-            </button>
-          ))}
+        <div className="search-popup">
+          {loading && <p className="search-message">Loading Pokémon…</p>}
+          {error && (
+            <div className="search-message">
+              Search unavailable. You can enter a name.{' '}
+              <button type="button" onClick={() => setRetry((n) => n + 1)}>
+                Retry
+              </button>
+            </div>
+          )}
+          {!loading && !error && !matches.length && (
+            <p className="search-message">No matching Pokémon.</p>
+          )}
+          <div
+            className="search-panel"
+            id={id}
+            role="listbox"
+            aria-label="Pokémon options"
+            ref={panel}
+          >
+            {matches.map((name, index) => (
+              <div
+                id={`${id}-${index}`}
+                key={name}
+                role="option"
+                aria-selected={index === active}
+                data-index={index}
+                className={`search-item ${index === active ? 'active' : ''}`}
+                onPointerDown={(event) => event.preventDefault()}
+                onClick={() => choose(name)}
+              >
+                {name}
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>

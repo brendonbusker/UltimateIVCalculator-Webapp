@@ -1,3 +1,5 @@
+import { getPokemonPayload, getSpeciesPayload as getSpecies } from './pokemon-display-data';
+import { memoRequest, cachedJson } from './request-cache';
 import { withBasePath } from '@/lib/app-config';
 import { CHARACTERISTICS, CHARACTERISTICS_RESPONSE, GENERATIONS, NATURE_EFFECTS, NATURES } from '@/lib/static-data';
 import {
@@ -13,7 +15,6 @@ import {
   StatKey,
 } from '@/lib/types';
 
-const POKEAPI_BASE = 'https://pokeapi.co/api/v2';
 const HISTORICAL_RAW_URL = 'https://raw.githubusercontent.com/zhenga8533/pokedb/data/gen{generation}/pokemon/default/{slug}.json';
 const SEARCHABLE_POKEMON_PATH = '/pages-data/searchable-pokemon.json';
 
@@ -55,48 +56,18 @@ const VERSION_GROUP_GENERATION_LOOKUP: Record<string, number> = {
   'scarlet-violet': 9,
 };
 
-type ExternalPokemon = {
-  name: string;
-  stats: Array<{ base_stat: number; stat: { name: string } }>;
-  types: Array<{ slot: number; type: { name: string } }>;
-  abilities: Array<{ is_hidden?: boolean; ability: { name: string } }>;
-  forms: Array<{ name: string; url: string }>;
-  species: { name: string };
-  height: number;
-  weight: number;
-  sprites: {
-    front_default?: string | null;
-    front_shiny?: string | null;
-  };
-};
-
 type ExternalForm = {
   is_battle_only?: boolean;
   is_mega?: boolean;
   version_group?: { name?: string };
 };
 
-type ExternalSpecies = {
-  generation: { name: string };
-};
-
 type HistoricalPayload = {
   stats?: Record<string, number>;
 };
 
-const searchIndexPromise: { current: Promise<SearchResult[]> | null } = { current: null };
-const pokemonCache = new Map<string, Promise<ExternalPokemon>>();
 const pokemonFormCache = new Map<string, Promise<ExternalForm>>();
-const speciesCache = new Map<string, Promise<ExternalSpecies>>();
 const historicalCache = new Map<string, Promise<Record<StatKey, number> | null>>();
-
-async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, init);
-  if (!response.ok) {
-    throw new Error(`Request failed with status ${response.status}`);
-  }
-  return (await response.json()) as T;
-}
 
 function titleCaseSlug(value: string): string {
   return value
@@ -114,7 +85,7 @@ function normalizeHistoricalStats(stats: Record<string, number> | undefined, gen
   let specialDefense = Number(stats?.special_defense ?? stats?.['special-defense'] ?? 0);
 
   if (generation === 1) {
-    const special = specialAttack || specialDefense;
+    const special = Number(stats?.special ?? 0) || specialAttack || specialDefense;
     specialAttack = special;
     specialDefense = special;
   }
@@ -130,71 +101,26 @@ function normalizeHistoricalStats(stats: Record<string, number> | undefined, gen
 }
 
 async function getSearchIndex(): Promise<SearchResult[]> {
-  if (!searchIndexPromise.current) {
-    searchIndexPromise.current = fetchJson<SearchResult[]>(withBasePath(SEARCHABLE_POKEMON_PATH), { cache: 'force-cache' });
-  }
-
-  return searchIndexPromise.current;
+  return cachedJson<SearchResult[]>(withBasePath(SEARCHABLE_POKEMON_PATH));
 }
-
-async function getPokemonPayload(name: string): Promise<ExternalPokemon> {
-  const key = name.toLowerCase().trim();
-  if (!pokemonCache.has(key)) {
-    pokemonCache.set(key, fetchJson<ExternalPokemon>(`${POKEAPI_BASE}/pokemon/${encodeURIComponent(key)}`));
-  }
-  return pokemonCache.get(key)!;
-}
-
 async function getPokemonForm(name: string): Promise<ExternalForm> {
-  const key = name.toLowerCase().trim();
-  if (!pokemonFormCache.has(key)) {
-    pokemonFormCache.set(
-      key,
-      (async () => {
-        const pokemon = await getPokemonPayload(name);
-        const firstForm = pokemon.forms[0]?.url;
-        if (!firstForm) {
-          return {};
-        }
-        return fetchJson<ExternalForm>(firstForm);
-      })(),
-    );
-  }
-  return pokemonFormCache.get(key)!;
-}
-
-async function getSpecies(name: string): Promise<ExternalSpecies> {
-  const key = name.toLowerCase().trim();
-  if (!speciesCache.has(key)) {
-    speciesCache.set(key, fetchJson<ExternalSpecies>(`${POKEAPI_BASE}/pokemon-species/${encodeURIComponent(key)}`));
-  }
-  return speciesCache.get(key)!;
+  return memoRequest(pokemonFormCache, name.toLowerCase().trim(), async () => {
+    const pokemon = await getPokemonPayload(name);
+    const firstForm = pokemon.forms[0]?.url;
+    return firstForm ? cachedJson<ExternalForm>(firstForm) : {};
+  });
 }
 
 async function getHistoricalBaseStats(name: string, generation: number): Promise<Record<StatKey, number> | null> {
   const key = `${name.toLowerCase().trim()}::${generation}`;
-  if (!historicalCache.has(key)) {
-    historicalCache.set(
-      key,
-      (async () => {
-        const url = HISTORICAL_RAW_URL
-          .replace('{generation}', String(generation))
-          .replace('{slug}', name.toLowerCase().trim());
-
-        const response = await fetch(url, { cache: 'force-cache' });
-        if (response.status === 404) {
-          return null;
-        }
-        if (!response.ok) {
-          throw new Error('Could not load historical Pokemon data.');
-        }
-
-        const payload = (await response.json()) as HistoricalPayload;
-        return normalizeHistoricalStats(payload.stats, generation);
-      })(),
-    );
-  }
-  return historicalCache.get(key)!;
+  return memoRequest(historicalCache, key, async () => {
+    const url = HISTORICAL_RAW_URL.replace('{generation}', String(generation)).replace('{slug}', name.toLowerCase().trim());
+    const response = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    if (response.status === 404) return null;
+    if (!response.ok) throw new Error('Could not load historical Pokémon data. Please retry.');
+    const payload = (await response.json()) as HistoricalPayload;
+    return normalizeHistoricalStats(payload.stats, generation);
+  });
 }
 
 async function getIntroducedGeneration(name: string): Promise<number> {
@@ -309,7 +235,7 @@ function filterWithCharacteristic(candidates: Record<StatKey, number[]>, charact
   );
 
   if (!validTarget.length) {
-    return Object.fromEntries(STAT_KEYS.map((key) => [key, []])) as Record<StatKey, number[]>;
+    return Object.fromEntries(STAT_KEYS.map((key) => [key, [] as number[]])) as Record<StatKey, number[]>;
   }
 
   const filtered = { ...candidates };
@@ -369,7 +295,7 @@ function calculateOldGenerationCandidates(
   }
 
   if (!validTuples.length) {
-    return Object.fromEntries(STAT_KEYS.map((key) => [key, []])) as Record<StatKey, number[]>;
+    return Object.fromEntries(STAT_KEYS.map((key) => [key, [] as number[]])) as Record<StatKey, number[]>;
   }
 
   return {
