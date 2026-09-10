@@ -201,7 +201,7 @@ export default function PokedexShell() {
       calculator.selectPokemon(forms[(current + 1) % forms.length]);
   }
   return (
-    <main className={`device-scene ${booting ? 'is-booting' : 'is-ready'}`}>
+    <div className={`device-scene ${booting ? 'is-booting' : 'is-ready'}`}>
       <div className="device" ref={device} inert={booting}>
         <aside className="device-wing data-wing">
           <LensCluster />
@@ -310,6 +310,6 @@ export default function PokedexShell() {
           <small>Click, tap, Space or Escape to skip</small>
         </button>
       )}
-    </main>
+    </div>
   );
 }

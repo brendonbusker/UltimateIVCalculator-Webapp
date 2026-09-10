@@ -5,6 +5,12 @@ The interface uses real HTML/CSS hardware, a scrolling data terminal, a calculat
 and a Pokémon scanner. No concept-image overlay, UI framework, animation library,
 or runtime dependency was added for the redesign.
 
+## SEO and local review
+
+See [SEO_SETUP.md](SEO_SETUP.md) for the SEO audit, changed-file inventory, local
+production-preview instructions, canonical/sitemap URLs and Search Console setup.
+The SEO upgrade was reviewed locally and approved for publication on 2026-09-10.
+
 ## Pokédex architecture
 
 - `frontend/app/page.tsx` composes `PokedexShell`.

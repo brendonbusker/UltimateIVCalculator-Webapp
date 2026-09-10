@@ -8,6 +8,94 @@
   --red: #cd2632;
   --mono: 'Cascadia Code', 'SFMono-Regular', Consolas, monospace;
 }
+/* Static guide lives below the full-height device; all styles are scoped to it. */
+.calculator-guide,
+.site-footer,
+.script-notice {
+  width: min(940px, calc(100% - 60px));
+  margin: 0 auto;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.7;
+}
+.calculator-guide {
+  padding: 24px 0 12px;
+}
+.calculator-guide section {
+  padding: 24px 0;
+  border-top: 1px solid var(--line);
+}
+.calculator-guide h2 {
+  margin: 0 0 14px;
+  color: var(--text);
+  font-size: 19px;
+  line-height: 1.4;
+}
+.calculator-guide p {
+  margin: 0 0 14px;
+}
+.calculator-guide p:last-child {
+  margin-bottom: 0;
+}
+.generation-guide {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 32px;
+  margin: 20px 0;
+}
+.generation-guide > div {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: 12px;
+}
+.generation-guide dt {
+  color: var(--cyan);
+  font-family: var(--mono);
+  font-size: 13px;
+  padding-top: 2px;
+}
+.generation-guide dd {
+  margin: 0;
+}
+.calculator-guide .guide-note,
+.site-footer {
+  font-size: 13px;
+}
+.calculator-faq details {
+  border-bottom: 1px solid #29445380;
+}
+.calculator-faq summary {
+  padding: 12px 0;
+  min-height: 44px;
+  cursor: pointer;
+  color: var(--text);
+}
+.calculator-faq summary::marker {
+  color: var(--cyan);
+}
+.calculator-faq summary:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 3px;
+}
+.calculator-faq details p {
+  padding: 0 0 16px;
+}
+.site-footer {
+  padding: 4px 0 32px;
+}
+.script-notice {
+  padding-top: 20px;
+}
+@media (max-width: 600px) {
+  .calculator-guide,
+  .site-footer,
+  .script-notice {
+    width: calc(100% - 36px);
+  }
+  .generation-guide {
+    grid-template-columns: 1fr;
+  }
+}
 * {
   box-sizing: border-box;
 }
