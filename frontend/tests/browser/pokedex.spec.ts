@@ -148,7 +148,7 @@ test('empty selection, preview, keyboard search, calculation and invalidation', 
     page.getByRole('button', { name: 'Calculate DVs' }),
   ).toBeVisible();
 });
-test('physical shiny/forms/data controls, reduced motion, cry rejection', async ({
+test('physical shiny/forms controls, passive data, reduced motion, cry rejection', async ({
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -176,8 +176,33 @@ test('physical shiny/forms/data controls, reduced motion, cry rejection', async 
   await expect(
     page.getByRole('button', { name: 'Play Pokémon cry' }),
   ).toBeDisabled();
-  await page.getByRole('button', { name: 'DATA', exact: true }).click();
-  await expect(page.locator('#pokedex-data')).toBeFocused();
+  await expect(page.getByRole('button', { name: 'DATA', exact: true })).toHaveCount(0);
+  await expect(page.locator('.data-indicator')).toHaveText('DATA');
+  expect(await page.locator('.data-track').evaluate(el => getComputedStyle(el).animationName)).toBe('none');
+  expect(await page.locator('#pokedex-data').evaluate(el => {
+    el.scrollTop = 100;
+    return el.scrollTop;
+  })).toBe(0);
+});
+
+test('data feed keeps moving during hover and clicks and cannot be manually scrolled', async ({ page }) => {
+  await open(page);
+  const viewport = page.locator('#pokedex-data');
+  const track = page.locator('.data-track');
+  await expect(page.locator('.data-copy').first()).toContainText('Bulbasaur');
+  await viewport.hover();
+  const before = await track.evaluate(el => getComputedStyle(el).transform);
+  await expect.poll(() => track.evaluate(el => getComputedStyle(el).transform)).not.toBe(before);
+  await viewport.click();
+  await expect(viewport).not.toBeFocused();
+  await page.mouse.wheel(0, 350);
+  expect(await viewport.evaluate(el => el.scrollTop)).toBe(0);
+  expect(await viewport.evaluate(el => {
+    el.focus();
+    el.scrollTop = 100;
+    return { focused: document.activeElement === el, offset: el.scrollTop, tabIndex: el.tabIndex };
+  })).toEqual({ focused: false, offset: 0, tabIndex: -1 });
+  expect(await track.evaluate(el => getComputedStyle(el).animationPlayState)).toBe('running');
 });
 test('failed requests retry; old responses cannot overwrite a new selection', async ({
   page,

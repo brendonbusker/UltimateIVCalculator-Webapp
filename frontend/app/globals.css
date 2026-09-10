@@ -446,21 +446,13 @@ input::placeholder {
   height: 485px;
   min-height: 0;
   flex: 1;
-  overflow: auto;
-  scrollbar-width: thin;
-  scrollbar-color: #31868d #08232b;
+  overflow: clip;
+  user-select: none;
+  cursor: default;
   position: relative;
 }
 .data-track {
   animation: data-feed 64s linear infinite;
-}
-.data-viewport:hover .data-track,
-.data-viewport:focus-within .data-track {
-  animation-play-state: paused;
-}
-.data-viewport:focus .data-track {
-  animation: none;
-  transform: none;
 }
 .data-copy {
   padding: 17px 13px 0;
@@ -1133,19 +1125,24 @@ input::placeholder {
   gap: 8px;
   margin-top: 25px;
 }
-.physical-controls button {
+.physical-controls button,
+.physical-controls .data-indicator {
   padding: 10px 2px;
   font: bold 10px var(--mono);
   min-height: 42px;
   background: linear-gradient(#27323b, #0e171e);
   border: 2px solid #121418;
+  border-radius: 5px;
   box-shadow:
     0 0 0 2px #ff9b7770,
     inset 0 2px 1px #748390,
     0 4px 0 #56101a;
   color: #b5cad6;
 }
-.physical-controls button:first-child {
+.physical-controls .data-indicator {
+  display: grid;
+  place-items: center;
+  user-select: none;
   background: linear-gradient(#167bbd, #04386c);
   color: #d3f7ff;
 }
@@ -1774,7 +1771,8 @@ input::placeholder {
   .physical-controls {
     gap: 5px;
   }
-  .physical-controls button {
+  .physical-controls button,
+  .physical-controls .data-indicator {
     font-size: 9px;
   }
   .screen-title {
@@ -1948,7 +1946,8 @@ input::placeholder {
     margin-top: 19px;
     gap: 12px;
   }
-  .physical-controls button {
+  .physical-controls button,
+  .physical-controls .data-indicator {
     font-size: 11px;
     min-height: 44px;
   }
@@ -2280,8 +2279,5 @@ input::placeholder {
   }
   .is-booting .wing-back {
     display: none;
-  }
-  .data-viewport {
-    overflow-y: auto;
   }
 }

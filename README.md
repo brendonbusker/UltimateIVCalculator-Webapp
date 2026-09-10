@@ -15,7 +15,7 @@ The SEO upgrade was reviewed locally and approved for publication on 2026-09-10.
 
 - `frontend/app/page.tsx` composes `PokedexShell`.
 - `components/pokedex` owns casing, lenses, data feed, sprite scanner, boot sequence,
-  and DATA / SHINY / FORMS / CRY controls.
+  and the DATA indicator / SHINY / FORMS / CRY controls.
 - `components/calculator/CalculatorScreen.tsx` renders the form and result meters.
 - `hooks/useIVCalculator.ts` owns inputs, validation, generation changes, loading,
   and results. Input edits invalidate results and any pending calculation. Request
@@ -63,9 +63,10 @@ pressing again stops the previous sound. Missing cries disable the control and
 playback failures expose a retry message. There is no autoplay sound.
 
 The data feed duplicates normalized content for a CSS transform loop; the second
-copy is hidden from assistive technology. Hover pauses it. Keyboard focus returns
-it to a manually scrollable view; DATA resets and focuses that view. No React
-animation-frame loops are used.
+copy is hidden from assistive technology. The feed is a passive display: hover,
+clicks, wheel and touch input cannot pause or manually scroll it, and it is not a
+keyboard focus target. DATA is a noninteractive indicator. Reduced motion shows
+a still, clipped feed. No React animation-frame loops are used.
 
 Desktop uses the connected three-screen device. Tablet puts the calculator above
 the two secondary screens. Phones put the scanner and physical controls first,

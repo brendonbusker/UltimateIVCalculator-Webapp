@@ -102,7 +102,6 @@ export default function PokedexShell() {
   const display = usePokemonDisplayData(calculator.selected);
   const [booting, setBooting] = useState(true);
   const [shiny, setShiny] = useState(false);
-  const [reset, setReset] = useState(0);
   const [audioError, setAudioError] = useState('');
   const [playing, setPlaying] = useState(false);
   const audio = useRef<HTMLAudioElement | null>(null);
@@ -188,10 +187,6 @@ export default function PokedexShell() {
       setAudioError('Cry could not play. Press CRY to retry.');
     }
   }
-  function showData() {
-    setReset((value) => value + 1);
-    document.getElementById('pokedex-data')?.focus({ preventScroll: false });
-  }
   function nextForm() {
     const forms = display.data?.forms ?? [];
     const current = forms.findIndex(
@@ -212,7 +207,6 @@ export default function PokedexShell() {
               loading={display.loading}
               error={display.error}
               retry={display.retry}
-              reset={reset}
             />
           </div>
           <div className="hardware-footer" aria-hidden="true">
@@ -249,7 +243,7 @@ export default function PokedexShell() {
             loading={display.loading}
           />
           <div className="physical-controls" aria-label="Pokédex controls">
-            <button onClick={showData}>DATA</button>
+            <span className="data-indicator" aria-hidden="true">DATA</span>
             <button
               aria-pressed={shiny}
               onClick={() => setShiny((value) => !value)}

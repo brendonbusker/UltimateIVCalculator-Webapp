@@ -1,5 +1,4 @@
 'use client';
-import { useEffect, useRef } from 'react';
 import type { PokemonDisplayData } from '@/lib/pokemon-display-data';
 import { displayName } from '@/lib/pokemon-display-data';
 import type { PokemonSummary } from '@/lib/types';
@@ -7,22 +6,16 @@ import type { PokemonSummary } from '@/lib/types';
 export default function DataScreen({
   data,
   summary,
-  reset,
   loading,
   error,
   retry,
 }: {
   data: PokemonDisplayData | null;
   summary: PokemonSummary | null;
-  reset: number;
   loading: boolean;
   error: string;
   retry: () => void;
 }) {
-  const viewport = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (reset) viewport.current?.focus();
-  }, [reset]);
   const rows: Array<[string, string | number | undefined | null]> = [
     ['Height', data ? `${data.height} m` : summary && `${summary.height_m} m`],
     [
@@ -101,11 +94,8 @@ export default function DataScreen({
       </header>
       <div
         id="pokedex-data"
-        ref={viewport}
         className="data-viewport"
-        tabIndex={0}
-        aria-label="Pokédex information; focus to pause scrolling"
-        key={`${data?.name}-${reset}`}
+        key={data?.name}
       >
         <div className="data-track">
           <div className="data-copy">{content}</div>
