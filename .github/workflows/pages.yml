@@ -64,6 +64,8 @@ jobs:
 
       - name: Build static Pages export
         working-directory: frontend
+        env:
+          GOOGLE_SITE_VERIFICATION: ox4-0vAnv_wt6yMSUqspOK0vUM9o_bNm9imoyVfstUs
         run: npm run build:pages
 
       - name: Upload Pages artifact

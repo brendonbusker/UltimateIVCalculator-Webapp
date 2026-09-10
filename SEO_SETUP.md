@@ -119,10 +119,10 @@ markup, tracking scripts or meta keywords are added.
    A DNS Domain property for `github.io` is not appropriate.
 3. Choose HTML tag verification. Copy the genuine token from the tag's `content`
    attribute; do not invent a value.
-4. `frontend/app/layout.tsx` already accepts `GOOGLE_SITE_VERIFICATION` at build time.
-   To test locally, set that environment variable to the actual token before building.
-   After approval, provide the same variable to the Pages build in the workflow so
-   later builds retain it. No remote settings or workflow have been changed here.
+4. `frontend/app/layout.tsx` accepts `GOOGLE_SITE_VERIFICATION` at build time.
+   The owner-provided public verification token is configured on the Pages build
+   step in `.github/workflows/pages.yml`, so subsequent deployments retain it.
+   To test locally, set that environment variable to the same token before building.
    Alternatively copy Google's exact verification HTML file into `frontend/public/`;
    it will be served under the project path. Use the exact URL Google requests.
 5. After that approved release, check the tag in the generated head (or the verification
